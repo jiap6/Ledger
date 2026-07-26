@@ -52,9 +52,15 @@ def get_grantmakers(max_pages=None):
 
 
 def get_nonprofits(max_pages=None):
-    """MA 501(c)(3) organizations — the grant recipient side."""
-    return fetch_all({"state[id]": "MA", "c_code[id]": 3}, max_pages,
-                     checkpoint="data/raw/_nonprofits_partial.csv")
+    """MA 501(c)(3) orgs, split by NTEE group to stay under the 10k result cap."""
+    frames = []
+    for ntee in range(1, 11):
+        print(f"\n--- NTEE group {ntee} ---")
+        frames.append(fetch_all(
+            {"state[id]": "MA", "c_code[id]": 3, "ntee[id]": ntee},
+            max_pages))
+    out = pd.concat(frames, ignore_index=True)
+    return out.drop_duplicates(subset="ein")
 
 
 if __name__ == "__main__":
