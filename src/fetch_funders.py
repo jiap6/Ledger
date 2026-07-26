@@ -8,8 +8,7 @@ warnings.filterwarnings("ignore", message=".*OpenSSL.*")
 BASE = "https://projects.propublica.org/nonprofits/api/v2/search.json"
 HEADERS = {"User-Agent": "ledger-nonprofit-research-tool"}
 
-MAX_PAGES = 4  # small test run; set to None for the full pull
-
+MAX_PAGES = None  
 
 def fetch_all(params, max_pages=None, checkpoint=None):
     """Page through ProPublica search results into one DataFrame."""
