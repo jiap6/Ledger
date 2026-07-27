@@ -1,4 +1,4 @@
-"""One glance at whether the whole pipeline looks healthy."""
+"""Checking if everything runs correctly"""
 
 import pandas as pd
 
