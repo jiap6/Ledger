@@ -1,5 +1,4 @@
-"""pull 990-PF grant records for Massachusetts foundations."""
-"""api does not allow requests- hitting 403 error """
+"""Pull 990-PF grant records for Massachusetts foundations."""
 
 import os
 import time
@@ -12,10 +11,10 @@ warnings.filterwarnings("ignore", message=".*OpenSSL.*")
 
 HEADERS = {"User-Agent": "ledger-nonprofit-research-tool"}
 INDEX_URL = "https://apps.irs.gov/pub/epostcard/990/xml/{y}/index_{y}.csv"
-XML_URL = "https://projects.propublica.org/nonprofits/download-xml?object_id={oid}"
+XML_URL = "https://opendata.grantseeker.io/data/{oid}_public.xml"
 
-YEARS = [2023, 2024, 2025]
-MAX_FILINGS = 300          # cap the first run; raise once it works
+YEARS = [2020, 2021, 2022]   # mirror coverage stops before 2023
+MAX_FILINGS = 300            # cap the first run; raise once it works
 XML_DIR = "data/raw/xml"
 
 
@@ -55,8 +54,8 @@ def find_filings():
         frames.append(df)
 
     out = pd.concat(frames, ignore_index=True)
-    out = out.sort_values("TAX_PERIOD", ascending=False)
-    out = out.drop_duplicates(subset="EIN")   # newest filing per funder
+    out = out.sort_values("TAX_PERIOD")       # oldest first — better mirror coverage
+    out = out.drop_duplicates(subset="EIN")
     return out.head(MAX_FILINGS)
 
 
@@ -144,6 +143,9 @@ if __name__ == "__main__":
             failed.append((fname, str(e)))
 
     df = pd.DataFrame(rows)
+    if df.empty:
+        raise SystemExit(f"no grants parsed — {len(os.listdir(XML_DIR))} XML files on disk")
+
     df["amount"] = pd.to_numeric(df["amount"], errors="coerce")
     df = df[df["amount"] > 0]
     df.to_csv("data/processed/grants.csv", index=False)
