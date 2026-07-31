@@ -22,6 +22,9 @@ NTEE_GROUP = {
 }
 
 
+def norm_ein(x):
+    return str(x).replace("-", "").strip().zfill(9)
+
 def cause(code):
     return NTEE_GROUP.get(str(code)[:1].upper(), "unclassified")
 
@@ -41,16 +44,33 @@ def split_recipients(grants, rng):
     return grants[~grants["recipient_ein"].isin(test)], \
            grants[grants["recipient_ein"].isin(test)]
 
+def funder_cause_mix(train_grants, recips):
+    """For each funder, the share of its training grants going to each cause."""
+    lookup = recips.set_index("ein")["cause"]
+    g = train_grants.copy()
+    g["cause"] = g["recipient_ein"].map(lookup)
+    g = g.dropna(subset=["cause"])
 
-def funder_profiles(train_grants):
+    counts = g.groupby(["funder_ein", "cause"]).size()
+    totals = g.groupby("funder_ein").size()
+    return (counts.div(totals, level="funder_ein")
+            .rename("cause_share").reset_index())
+
+def funder_profiles(train_grants, grantmakers):
     """Aggregate each funder from TRAINING grants only — no leakage."""
-    return (train_grants
+    prof = (train_grants
             .groupby(["funder_ein", "funder_name"])
             .agg(profile=("purpose",
                           lambda s: " ".join(s.dropna().astype(str))[:4000]),
                  n_grants=("amount", "size"),
                  median_grant=("amount", "median"))
             .reset_index())
+
+    gm = grantmakers[["ein", "city"]].copy()
+    gm["funder_ein"] = gm["ein"].map(norm_ein)
+    gm = gm.rename(columns={"city": "funder_city"})[["funder_ein", "funder_city"]]
+
+    return prof.merge(gm.drop_duplicates("funder_ein"), on="funder_ein", how="left")
 
 
 def recipient_profiles(nonprofits):
@@ -75,25 +95,42 @@ def make_pairs(grants, funder_ids, funded_by, rng):
     return pd.DataFrame(rows, columns=["recipient_ein", "funder_ein", "label"])
 
 
-def add_features(pairs, funders, recips, fvec, rvec):
+def make_all_pairs(grants, funder_ids):
+    """Every (test recipient x every funder) pair, for ranking evaluation."""
+    truth = grants.groupby("recipient_ein")["funder_ein"].apply(set).to_dict()
+    rows = []
+    for r, funded in truth.items():
+        for f in funder_ids:
+            rows.append((r, f, int(f in funded)))
+    return pd.DataFrame(rows, columns=["recipient_ein", "funder_ein", "label"])
+
+
+def add_features(pairs, funders, recips, fvec, rvec, mix):
     p = (pairs
          .merge(funders, on="funder_ein", how="inner")
          .merge(recips.rename(columns={"ein": "recipient_ein"}),
                 on="recipient_ein", how="inner", suffixes=("_f", "_r")))
 
+    # behavioral: how much of this funder's giving goes to this cause
+    p = p.merge(mix, on=["funder_ein", "cause"], how="left")
+    p["cause_share"] = p["cause_share"].fillna(0)
+
+    # text similarity (kept, but no longer carrying the model)
     fi = fvec.loc[p["funder_ein"]].to_numpy()
     ri = rvec.loc[p["recipient_ein"]].to_numpy()
-    p["similarity"] = (fi * ri).sum(axis=1)          # both are unit vectors
+    p["similarity"] = (fi * ri).sum(axis=1)
 
-    p["same_city"] = (p["funder_name"].str.contains("BOSTON", case=False, na=False)
-                      == p["city"].str.contains("Boston", case=False, na=False)).astype(int)
+    # real city comparison — blank on either side is not a match
+    fc = p["funder_city"].fillna("").str.upper().str.strip()
+    rc = p["city"].fillna("").str.upper().str.strip()
+    p["same_city"] = ((fc == rc) & (fc != "")).astype(int)
+
     p["log_grants"] = np.log1p(p["n_grants"])
     p["log_median"] = np.log10(p["median_grant"].clip(lower=1))
 
-    cols = ["recipient_ein", "funder_ein", "label",
-            "similarity", "same_city", "log_grants", "log_median"]
+    cols = ["recipient_ein", "funder_ein", "label", "similarity",
+            "cause_share", "same_city", "log_grants", "log_median"]
     return p[cols]
-
 
 if __name__ == "__main__":
     rng = np.random.default_rng(SEED)
@@ -102,10 +139,14 @@ if __name__ == "__main__":
     train_g, test_g = split_recipients(grants, rng)
     print(f"train grants {len(train_g)} / test grants {len(test_g)}")
 
-    funders = funder_profiles(train_g)
+    grantmakers = pd.read_csv("data/raw/ma_grantmakers.csv")      # NEW
+    funders = funder_profiles(train_g, grantmakers)               # CHANGED
     recips = recipient_profiles(nonprofits)
     recips = recips[recips["ein"].isin(grants["recipient_ein"])]
     print(f"{len(funders)} funders / {len(recips)} recipients")
+
+    mix = funder_cause_mix(train_g, recips)                       # NEW
+    print(f"{len(mix)} funder/cause combinations")
 
     model = SentenceTransformer(MODEL)
     fvec = pd.DataFrame(
@@ -122,11 +163,18 @@ if __name__ == "__main__":
 
     for name, part in [("train", train_g), ("test", test_g)]:
         pairs = make_pairs(part, ids, funded_by, rng)
-        feat = add_features(pairs, funders, recips, fvec, rvec)
+        feat = add_features(pairs, funders, recips, fvec, rvec, mix)   # CHANGED
         feat.to_csv(f"data/processed/pairs_{name}.csv", index=False)
         print(f"{name}: {len(feat)} pairs, {feat.label.mean():.1%} positive")
 
     funders.to_csv("data/processed/funders.csv", index=False)
     recips.to_csv("data/processed/recipients.csv", index=False)
+
+    full = add_features(make_all_pairs(test_g, ids), funders, recips, fvec, rvec, mix)
+    full.to_csv("data/processed/pairs_test_full.csv", index=False)
+    print(f"ranking set: {len(full)} pairs, {full.recipient_ein.nunique()} recipients")
+
+
     fvec.to_parquet("data/processed/funder_vectors.parquet")
     rvec.to_parquet("data/processed/recipient_vectors.parquet")
+    
