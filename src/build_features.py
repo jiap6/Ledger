@@ -1,4 +1,4 @@
-"""build labeled funder/recipient pairs with features."""
+"""Build labeled funder/recipient pairs with features."""
 
 import numpy as np
 import pandas as pd
@@ -25,6 +25,7 @@ NTEE_GROUP = {
 def norm_ein(x):
     return str(x).replace("-", "").strip().zfill(9)
 
+
 def cause(code):
     return NTEE_GROUP.get(str(code)[:1].upper(), "unclassified")
 
@@ -44,6 +45,7 @@ def split_recipients(grants, rng):
     return grants[~grants["recipient_ein"].isin(test)], \
            grants[grants["recipient_ein"].isin(test)]
 
+
 def funder_cause_mix(train_grants, recips):
     """For each funder, the share of its training grants going to each cause."""
     lookup = recips.set_index("ein")["cause"]
@@ -55,6 +57,7 @@ def funder_cause_mix(train_grants, recips):
     totals = g.groupby("funder_ein").size()
     return (counts.div(totals, level="funder_ein")
             .rename("cause_share").reset_index())
+
 
 def funder_profiles(train_grants, grantmakers):
     """Aggregate each funder from TRAINING grants only — no leakage."""
@@ -132,6 +135,7 @@ def add_features(pairs, funders, recips, fvec, rvec, mix):
             "cause_share", "same_city", "log_grants", "log_median"]
     return p[cols]
 
+
 if __name__ == "__main__":
     rng = np.random.default_rng(SEED)
     grants, nonprofits = load()
@@ -139,13 +143,13 @@ if __name__ == "__main__":
     train_g, test_g = split_recipients(grants, rng)
     print(f"train grants {len(train_g)} / test grants {len(test_g)}")
 
-    grantmakers = pd.read_csv("data/raw/ma_grantmakers.csv")      # NEW
-    funders = funder_profiles(train_g, grantmakers)               # CHANGED
+    grantmakers = pd.read_csv("data/raw/ma_grantmakers.csv")
+    funders = funder_profiles(train_g, grantmakers)
     recips = recipient_profiles(nonprofits)
     recips = recips[recips["ein"].isin(grants["recipient_ein"])]
     print(f"{len(funders)} funders / {len(recips)} recipients")
 
-    mix = funder_cause_mix(train_g, recips)                       # NEW
+    mix = funder_cause_mix(train_g, recips)
     print(f"{len(mix)} funder/cause combinations")
 
     model = SentenceTransformer(MODEL)
@@ -163,18 +167,16 @@ if __name__ == "__main__":
 
     for name, part in [("train", train_g), ("test", test_g)]:
         pairs = make_pairs(part, ids, funded_by, rng)
-        feat = add_features(pairs, funders, recips, fvec, rvec, mix)   # CHANGED
+        feat = add_features(pairs, funders, recips, fvec, rvec, mix)
         feat.to_csv(f"data/processed/pairs_{name}.csv", index=False)
         print(f"{name}: {len(feat)} pairs, {feat.label.mean():.1%} positive")
-
-    funders.to_csv("data/processed/funders.csv", index=False)
-    recips.to_csv("data/processed/recipients.csv", index=False)
 
     full = add_features(make_all_pairs(test_g, ids), funders, recips, fvec, rvec, mix)
     full.to_csv("data/processed/pairs_test_full.csv", index=False)
     print(f"ranking set: {len(full)} pairs, {full.recipient_ein.nunique()} recipients")
 
-
+    funders.to_csv("data/processed/funders.csv", index=False)
+    recips.to_csv("data/processed/recipients.csv", index=False)
+    mix.to_csv("data/processed/cause_mix.csv", index=False)
     fvec.to_parquet("data/processed/funder_vectors.parquet")
     rvec.to_parquet("data/processed/recipient_vectors.parquet")
-    
