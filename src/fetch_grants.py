@@ -111,14 +111,15 @@ def parse_filing(path):
         if tag(g) != "GrantOrContributionPdDurYrGrp":
             continue
 
-        recipient = (text_of(g, "BusinessNameLine1Txt")
-                     or text_of(g, "RecipientPersonNm"))
+        biz = text_of(g, "BusinessNameLine1Txt")
+        person = text_of(g, "RecipientPersonNm")
 
         rows.append({
             "funder_ein": ein,
             "funder_name": funder,
             "tax_year": period[:4],
-            "recipient_name": recipient,
+            "recipient_name": biz or person,
+            "recipient_is_person": int(not biz and bool(person)),
             "recipient_city": text_of(g, "CityNm"),
             "recipient_state": text_of(g, "StateAbbreviationCd"),
             "amount": text_of(g, "Amt"),
