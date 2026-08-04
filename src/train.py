@@ -6,6 +6,10 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import roc_auc_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+
 
 FEATURES = ["similarity", "cause_share", "same_city", "log_grants", "log_median"]
 K = 10
@@ -33,8 +37,11 @@ if __name__ == "__main__":
     Xtr, ytr = tr[FEATURES], tr["label"]
     Xte, yte = full[FEATURES], full["label"]
 
-    logit = LogisticRegression(max_iter=2000, class_weight="balanced")
+
+    logit = make_pipeline(StandardScaler(),
+                      LogisticRegression(max_iter=2000, class_weight="balanced"))
     logit.fit(Xtr, ytr)
+    coefs = logit[-1].coef_[0]
 
     gbm = HistGradientBoostingClassifier(max_iter=300, random_state=SEED)
     gbm.fit(Xtr, ytr)

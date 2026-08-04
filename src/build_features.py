@@ -76,12 +76,19 @@ def funder_profiles(train_grants, grantmakers):
     return prof.merge(gm.drop_duplicates("funder_ein"), on="funder_ein", how="left")
 
 
-def recipient_profiles(nonprofits):
-    """Recipients have no mission text available — use name plus cause area."""
+def recipient_profiles(nonprofits, missions):
+    """Name + cause + the organization's own mission text where available."""
     out = nonprofits[["ein", "name", "city", "ntee_code"]].copy()
     out["cause"] = out["ntee_code"].map(cause)
-    out["profile"] = out["name"].fillna("") + ". " + out["cause"]
-    return out.drop_duplicates(subset="ein")
+    out = out.drop_duplicates(subset="ein")
+
+    out = out.merge(missions, on="ein", how="left")
+    out["mission"] = out["mission"].fillna("")
+    out["profile"] = (out["name"].fillna("") + ". " + out["cause"]
+                      + ". " + out["mission"]).str.strip()
+
+    print(f"mission text for {(out['mission'] != '').mean():.0%} of recipients")
+    return out
 
 
 def make_pairs(grants, funder_ids, funded_by, rng):
@@ -145,7 +152,8 @@ if __name__ == "__main__":
 
     grantmakers = pd.read_csv("data/raw/ma_grantmakers.csv")
     funders = funder_profiles(train_g, grantmakers)
-    recips = recipient_profiles(nonprofits)
+    missions = pd.read_csv("data/processed/recipient_missions.csv", dtype={"ein": str})
+    recips = recipient_profiles(nonprofits, missions)
     recips = recips[recips["ein"].isin(grants["recipient_ein"])]
     print(f"{len(funders)} funders / {len(recips)} recipients")
 

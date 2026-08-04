@@ -41,10 +41,9 @@ def load_data():
 
     return funders[funders["funder_ein"].isin(fvec.index)], fvec, mix, grants
 
-
-def rank(name, cause, city, funders, fvec, mix, embedder, model):
+def rank(name, cause, city, mission, funders, fvec, mix, embedder, model):
     """Score every funder using the same features the model trained on."""
-    vec = embedder.encode([f"{name}. {cause}"], normalize_embeddings=True)[0]
+    vec = embedder.encode([f"{name}. {cause}. {mission}"], normalize_embeddings=True)[0]
 
     df = funders.copy()
     df["similarity"] = fvec.loc[df["funder_ein"]].to_numpy() @ vec
@@ -82,9 +81,12 @@ name = st.text_input("Organization name", "Dorchester Youth Robotics",
                      max_chars=MAX_NAME)
 cause = st.selectbox("Cause area", CAUSES, index=CAUSES.index("youth development"))
 city = st.text_input("City", "Boston", max_chars=60)
+mission = st.text_area("What does your organization do?",
+                       "Free after-school robotics for middle schoolers.",
+                       max_chars=1500)
 
 if st.button("Find funders", type="primary"):
-    results = rank(name, cause, city, funders, fvec, mix, embedder, model)
+    results = rank(name, cause, city, mission, funders, fvec, mix, embedder, model)
 
     st.subheader(f"Top {K} matches")
     for _, r in results.iterrows():
