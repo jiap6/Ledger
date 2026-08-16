@@ -11,6 +11,16 @@ from sentence_transformers import SentenceTransformer
 
 sys.path.insert(0, "src")
 from build_features import NTEE_GROUP
+import joblib
+from train_risk import FEATURES as RISK_FEATURES, build_features
+
+@st.cache_resource
+def load_risk():
+    return joblib.load("models/risk.pkl")
+
+@st.cache_data
+def load_peers():
+    return pd.read_csv("data/processed/health_peers.csv", index_col=0)
 
 # full pipeline output locally; trimmed committed copy when deployed
 DATA = Path("data/processed") if Path("data/processed/funders.csv").exists() else Path("app_data")
@@ -19,6 +29,48 @@ FEATURES = ["similarity", "cause_share", "same_city", "log_grants", "log_median"
 CAUSES = sorted(set(NTEE_GROUP.values()))
 K = 10
 MAX_NAME = 200
+
+search_tab, ask_tab, health_tab = st.tabs(
+    ["Find funders", "Ask Ledger", "Health check"])
+
+with health_tab:
+    st.caption("Enter your own organization's numbers. "
+               "Ledger does not publish or rank other organizations.")
+
+    c1, c2 = st.columns(2)
+    rev = c1.number_input("Annual revenue", min_value=0, value=180_000, step=1000)
+    exp = c2.number_input("Annual expenses", min_value=0, value=195_000, step=1000)
+    ast = c1.number_input("Total assets", min_value=0, value=60_000, step=1000)
+    lia = c2.number_input("Total liabilities", min_value=0, value=15_000, step=1000)
+    prior = st.number_input("Revenue three years ago", min_value=0,
+                            value=210_000, step=1000)
+
+    if st.button("Check", type="primary"):
+        row = pd.DataFrame([{
+            "log_revenue": np.log10(max(rev, 1)),
+            "expense_ratio": exp / max(rev, 1),
+            "months_reserve": np.clip((ast - lia) / max(exp / 12, 1), -12, 60),
+            "revenue_trend": np.clip((max(rev, 1) / max(prior, 1)) ** (1 / 3) - 1, -1, 3),
+            "revenue_volatility": 0.0,
+            "deficit_years": int(exp > rev),
+            "n_filings": 3,
+        }])[RISK_FEATURES]
+
+        score = load_risk().predict_proba(row)[0, 1]
+        peers = load_peers()
+
+        st.metric("Estimated lapse risk", f"{score:.0%}")
+        st.progress(min(score, 1.0))
+
+        st.write("**How you compare to organizations that stayed active**")
+        for f, label in [("months_reserve", "Months of reserve"),
+                         ("expense_ratio", "Expenses / revenue"),
+                         ("revenue_trend", "Annual revenue growth")]:
+            st.write(f"{label}: **{row[f].iloc[0]:.2f}** "
+                     f"(healthy peers: {peers.loc[f, '0']:.2f})")
+
+        st.info("An estimate from historical filings, not a prediction about "
+                "your organization. Not financial or legal advice.")
 
 
 @st.cache_resource
