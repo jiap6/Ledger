@@ -20,7 +20,7 @@ COLS = ["ein", "name", "dba", "address", "city", "state", "zip", "country",
 
 AS_OF = 2018          # features come only from filings at or before this year
 WINDOW = 4            # years of history to look back
-N_PER_CLASS = 900     # candidates to try per class
+N_PER_CLASS = 900     # target organizations per class
 OUT = "data/processed/health_raw.csv"
 
 
@@ -41,9 +41,8 @@ def revoked_ma():
                              dtype=str, quoting=3, on_bad_lines="skip")
 
     df["ein"] = df["ein"].map(norm_ein)
-    df = df[df["state"].str.strip().eq("MA")]
-    df["rev_year"] = pd.to_datetime(df["revocation_date"],
-                                    errors="coerce").dt.year
+    df = df[df["state"].fillna("").str.strip().eq("MA")]
+    df["rev_year"] = pd.to_datetime(df["revocation_date"], errors="coerce").dt.year
     print(f"{len(df)} revoked MA organizations")
     return df
 
@@ -64,13 +63,14 @@ def collect(eins, label, want):
             break
 
         filings = [f for f in fetch_filings(ein)
-                   if f.get("tax_prd_yr") and int(f["tax_prd_yr"]) <= AS_OF
-                   and int(f["tax_prd_yr"]) > AS_OF - WINDOW]
+                   if f.get("tax_prd_yr")
+                   and AS_OF - WINDOW < int(f["tax_prd_yr"]) <= AS_OF]
 
-        if len(filings) >= 2:                 # need a trend, not a snapshot
+        if len(filings) >= 2:              # need a trend, not a snapshot
             for f in filings:
                 rows.append({
-                    "ein": ein, "label": label,
+                    "ein": ein,
+                    "label": label,
                     "year": int(f["tax_prd_yr"]),
                     "revenue": f.get("totrevenue"),
                     "expenses": f.get("totfuncexpns"),

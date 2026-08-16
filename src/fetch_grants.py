@@ -14,7 +14,7 @@ INDEX_URL = "https://apps.irs.gov/pub/epostcard/990/xml/{y}/index_{y}.csv"
 XML_URL = "https://opendata.grantseeker.io/data/{oid}_public.xml"
 
 YEARS = [2020, 2021, 2022]   # mirror coverage stops before 2023
-MAX_FILINGS = 300            # cap the first run; raise once it works
+MAX_FILINGS = 1200            # cap the first run; raise once it works
 XML_DIR = "data/raw/xml"
 
 

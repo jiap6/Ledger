@@ -1,15 +1,13 @@
-"""Day 9 — a read-only agent over the Ledger model."""
+"""A read-only agent over the Ledger ranking model."""
 
 import json
 import os
 import sys
 
-import pandas as pd
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
-sys.path.insert(0, ".")
-from app import evidence, load_data, load_model, rank
+from core import load_data, load_model, rank
 
 load_dotenv()
 
@@ -54,12 +52,14 @@ TOOLS = [
 
 
 class Ledger:
+    """The only things the agent is allowed to do. All read-only."""
+
     def __init__(self):
         self.model, self.embedder = load_model()
         self.funders, self.fvec, self.mix, self.grants = load_data()
 
     def rank_funders(self, name, cause, city, mission=""):
-        r = rank(f"{name}. {mission}".strip(), cause, city,
+        r = rank(name, cause, city, mission,
                  self.funders, self.fvec, self.mix, self.embedder, self.model)
         return r[["funder_ein", "funder_name", "funder_city",
                   "score", "cause_share", "median_grant"]].to_dict("records")
@@ -72,8 +72,17 @@ class Ledger:
             ["recipient_name", "amount", "purpose", "tax_year"]].to_dict("records")
 
 
+def _client():
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        import streamlit as st
+        key = st.secrets["ANTHROPIC_API_KEY"]
+    return Anthropic(api_key=key)
+
+
 def run(question, tools):
-    client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    """Loop: ask the model, run any tool it requests, send results back."""
+    client = _client()
     messages = [{"role": "user", "content": question}]
 
     for _ in range(MAX_TURNS):
@@ -90,8 +99,7 @@ def run(question, tools):
         for block in resp.content:
             if block.type != "tool_use":
                 continue
-            fn = getattr(tools, block.name)
-            out = fn(**block.input)
+            out = getattr(tools, block.name)(**block.input)
             results.append({
                 "type": "tool_result",
                 "tool_use_id": block.id,
@@ -103,8 +111,7 @@ def run(question, tools):
 
 
 if __name__ == "__main__":
-    tools = Ledger()
     q = (sys.argv[1] if len(sys.argv) > 1 else
          "We run free after-school robotics for middle schoolers in Boston. "
          "Who should we approach, and draft an intro email to the best match.")
-    print(run(q, tools))
+    print(run(q, Ledger()))
