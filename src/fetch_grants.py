@@ -113,6 +113,7 @@ def parse_filing(path):
 
         biz = text_of(g, "BusinessNameLine1Txt")
         person = text_of(g, "RecipientPersonNm")
+        recipient = biz or person
 
         rows.append({
             "funder_ein": ein,
