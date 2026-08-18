@@ -4,16 +4,16 @@ import sys
 
 import pandas as pd
 import streamlit as st
-from brand import (SHAPES, TONES, brand_sheet, contrast_report, logo_svg,
-                   palette)
 
 sys.path.insert(0, "src")
+
+from brand import (SHAPES, TONES, brand_sheet, contrast_report, logo_svg,
+                   palette)
 from build_features import NTEE_GROUP
 from core import (K, contributions, embed, evidence, load_data, load_model,
                   rank, similar_orgs)
 from startup import (MONTHS, cause_mix_by_city, deadlines, load_nonprofits,
                      overlap, saturation)
-
 CAUSES = sorted(set(NTEE_GROUP.values()))
 
 load_model = st.cache_resource(load_model)
