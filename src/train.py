@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler
 
 
 
-FEATURES = ["similarity", "cause_share", "same_city", "log_grants", "log_median"]
+FEATURES = ["cause_share", "log_distance", "log_grants", "log_median"]
 K = 10
 SEED = 42
 
@@ -64,7 +64,8 @@ if __name__ == "__main__":
     print(f"  gradient boosting     {recall_at_k(full, p_gbm):.1%}")
 
     print("\nLogistic regression coefficients")
-    for f, c in sorted(zip(FEATURES, logit.coef_[0]), key=lambda x: -abs(x[1])):
+    coefs = logit[-1].coef_[0] if hasattr(logit, "named_steps") else logit.coef_[0]
+    for f, c in sorted(zip(FEATURES, coefs), key=lambda x: -abs(x[1])):
         print(f"  {f:<16} {c:+.3f}")
 
     joblib.dump(gbm, "models/ranker.pkl")

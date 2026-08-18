@@ -28,6 +28,9 @@ if __name__ == "__main__":
     print(f"dropped {before - len(grants)} grants to named individuals")
 
     grants[KEEP].to_csv(OUT / "grants_matched.csv", index=False)
+    npo = pd.read_csv("data/raw/ma_nonprofits.csv", dtype={"ein": str})
+    npo[["ein", "name", "city", "ntee_code"]].to_csv(OUT / "nonprofits.csv",
+                                                     index=False)
     for f in COPY:
         shutil.copy(SRC / f, OUT / f)
 

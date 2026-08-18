@@ -9,11 +9,14 @@ sys.path.insert(0, "src")
 from build_features import NTEE_GROUP
 from core import (K, contributions, embed, evidence, load_data, load_model,
                   rank, similar_orgs)
+from startup import (MONTHS, cause_mix_by_city, deadlines, load_nonprofits,
+                     overlap, saturation)
 
 CAUSES = sorted(set(NTEE_GROUP.values()))
 
 load_model = st.cache_resource(load_model)
 load_data = st.cache_data(load_data)
+load_nonprofits = st.cache_data(load_nonprofits)
 
 st.set_page_config(page_title="Ledger", layout="centered")
 st.title("Ledger")
@@ -28,7 +31,7 @@ with st.sidebar:
     cause = st.selectbox("Cause area", CAUSES,
                          index=CAUSES.index("youth development"))
     city = st.text_input("City", "Boston", max_chars=60)
-    mission = st.text_area("What you do",
+    mission = st.text_area("What you do (used to find similar organizations)",
                            "Free after-school robotics for middle schoolers.",
                            max_chars=1500)
 
@@ -49,8 +52,8 @@ def scored():
                 min_grant, min_count)
 
 
-match_tab, map_tab, peer_tab, explore_tab = st.tabs(
-    ["Matches", "Map", "Organizations like yours", "Explore"])
+match_tab, map_tab, peer_tab, start_tab, explore_tab = st.tabs(
+    ["Matches", "Map", "Organizations like yours", "Start here", "Explore"])
 
 with match_tab:
     if vec is None:
@@ -121,7 +124,9 @@ with map_tab:
             st.warning("No coordinates available for these funders.")
         else:
             top["size"] = 200 + 2400 * (top["score"] / top["score"].max())
-            st.caption(f"Top {len(top)} matches — larger circles score higher")
+            st.caption("Rankings are driven by each funder's giving history, "
+                       "cause focus, and location. Your description powers the "
+                       "Organizations like yours tab.")
             st.map(top, latitude="lat", longitude="lon", size="size",
                    color="#2b6cb0")
 
@@ -153,6 +158,68 @@ with peer_tab:
                                  f"${f['amount']:,.0f}")
                 else:
                     st.caption("No grants on file.")
+
+with start_tab:
+    npo = load_nonprofits()
+
+    st.subheader("Does this already exist?")
+    st.caption("Before founding a new organization, it's worth knowing who's "
+               "already doing this work nearby — and whether joining them "
+               "beats starting from zero.")
+
+    o = overlap(npo, cause, city)
+    c1, c2 = st.columns(2)
+    c1.metric(f"In {city.title()}", f"{o['in_city']:,}")
+    c2.metric("In Massachusetts", f"{o['in_state']:,}")
+
+    if o["in_city"]:
+        st.dataframe(o["examples"], hide_index=True, use_container_width=True,
+                     column_config={"name": "Organization", "city": "City"})
+    else:
+        st.success(f"No registered {cause} organizations found in "
+                   f"{city.title()} — this may be an underserved area.")
+
+    st.divider()
+
+    st.subheader("Where this work is concentrated")
+    st.caption(f"Registered {cause} organizations by city")
+    st.bar_chart(saturation(npo, cause), horizontal=True)
+
+    st.subheader(f"What the sector looks like in {city.title()}")
+    mixc = cause_mix_by_city(npo, city)
+    if mixc.empty:
+        st.info("No registered organizations found for that city name.")
+    else:
+        st.bar_chart(mixc, horizontal=True)
+
+    st.divider()
+
+    st.subheader("Your filing calendar")
+    fye = st.selectbox("Fiscal year ends", MONTHS, index=11)
+    for label, when in deadlines(MONTHS.index(fye) + 1).items():
+        st.write(f"**{when}** — {label}")
+
+    st.markdown("""
+**Getting registered in Massachusetts**
+
+- Every public charity operating in Massachusetts registers with the
+  Attorney General's Non-Profits/Public Charities Division. Initial
+  registration is $100.
+- Soliciting donations additionally requires a Certificate for Solicitation.
+- Form PC has been e-file only since September 2023.
+- Massachusetts nonprofit corporations also file an annual report with the
+  Secretary of the Commonwealth.
+- Which 990 you file depends on gross receipts and assets — check the
+  current thresholds before choosing.
+
+Verify everything against the source before acting:
+[Mass. AG charities division](https://www.mass.gov/how-to/register-a-charity-in-massachusetts)
+· [IRS 990 filing requirements](https://www.irs.gov/charities-non-profits/form-990-series-which-forms-do-exempt-organizations-file-filing-phase-in)
+    """)
+
+    st.info("General information compiled from public sources, not legal or "
+            "tax advice. Requirements and fees change — confirm with the "
+            "Attorney General's office or an attorney.")
 
 with explore_tab:
     st.caption(f"{len(grants):,} grants from {grants.funder_ein.nunique()} "

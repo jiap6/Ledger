@@ -5,7 +5,13 @@ import pandas as pd
 from rapidfuzz import process, fuzz
 
 FILLER = r"\b(INC|INCORPORATED|CORP|CORPORATION|COMPANY|CO|LLC|LTD|THE|A|AN|AND|OF|FOR)\b"
-CUTOFF = 88
+CUTOFF = 95
+
+
+def acceptable(a, b):
+    """Reject the short-name substring matches WRatio produces."""
+    ta, tb = set(a.split()), set(b.split())
+    return min(len(ta), len(tb)) >= 2 and len(ta & tb) >= 2
 
 
 def normalize(name):
@@ -34,9 +40,9 @@ def match_to_eins(grants, nonprofits):
         if n in lookup:
             resolved[n] = (lookup[n], 100)
         else:
-            hit = process.extractOne(n, choices, scorer=fuzz.WRatio,
+            hit = process.extractOne(n, choices, scorer=fuzz.token_set_ratio,
                                      score_cutoff=CUTOFF)
-            if hit:
+            if hit and acceptable(n, hit[0]):
                 resolved[n] = (lookup[hit[0]], hit[1])
         if i % 500 == 0:
             print(f"  {i}/{len(names)}")

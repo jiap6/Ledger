@@ -12,13 +12,10 @@ from build_features import haversine, key
 DATA = (Path("data/processed") if Path("data/processed/funders.csv").exists()
         else Path("app_data"))
 
-FEATURES = ["similarity", "cause_share", "same_city", "log_distance",
-            "log_grants", "log_median"]
+FEATURES = ["cause_share", "log_distance", "log_grants", "log_median"]
 
 LABELS = {
-    "similarity": "Mission text match",
     "cause_share": "Gives to your cause",
-    "same_city": "Same city",
     "log_distance": "Distance from you",
     "log_grants": "Grant volume",
     "log_median": "Typical grant size",
