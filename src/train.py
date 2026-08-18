@@ -68,5 +68,5 @@ if __name__ == "__main__":
     for f, c in sorted(zip(FEATURES, coefs), key=lambda x: -abs(x[1])):
         print(f"  {f:<16} {c:+.3f}")
 
-    joblib.dump(gbm, "models/ranker.pkl")
+    joblib.dump(logit, "models/ranker.pkl")
     print("\nsaved models/ranker.pkl")

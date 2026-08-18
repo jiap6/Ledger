@@ -89,14 +89,17 @@ def rank(vec, cause, city, funders, fvec, mix, model, coords,
 
 
 def contributions(model, row):
-    """How much each feature pushed this score, in log-odds."""
+    """Per-feature log-odds contribution. Empty if the model has no coefficients."""
     x = row[FEATURES].to_frame().T.astype(float)
     if hasattr(model, "named_steps"):
         z, clf = model[:-1].transform(x), model[-1]
     else:
         z, clf = x.to_numpy(), model
-    return pd.Series(z[0] * clf.coef_[0], index=[LABELS[f] for f in FEATURES])
 
+    if not hasattr(clf, "coef_"):
+        return pd.Series(dtype=float)
+
+    return pd.Series(z[0] * clf.coef_[0], index=[LABELS[f] for f in FEATURES])
 
 def similar_orgs(vec, rvec, recips, grants, n=5):
     """Nonprofits most like yours, and who funded them."""

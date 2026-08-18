@@ -86,8 +86,10 @@ with match_tab:
                                    f"{str(e.purpose).lower()}")
 
                     with st.expander("Why this score, and what they fund"):
-                        st.write("**What drove the score**")
-                        st.bar_chart(contributions(model, r), horizontal=True)
+                        contrib = contributions(model, r)
+                        if not contrib.empty:
+                            st.write("**What drove the score**")
+                            st.bar_chart(contrib, horizontal=True)
 
                         fm = (mix[mix["funder_ein"] == r.funder_ein]
                               .set_index("cause")["cause_share"].nlargest(6))
