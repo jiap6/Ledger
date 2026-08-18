@@ -4,6 +4,8 @@ import sys
 
 import pandas as pd
 import streamlit as st
+from brand import (SHAPES, TONES, brand_sheet, contrast_report, logo_svg,
+                   palette)
 
 sys.path.insert(0, "src")
 from build_features import NTEE_GROUP
@@ -51,9 +53,9 @@ def scored():
     return rank(vec, cause, city, funders, fvec, mix, model, coords,
                 min_grant, min_count)
 
-
-match_tab, map_tab, peer_tab, start_tab, explore_tab = st.tabs(
-    ["Matches", "Map", "Organizations like yours", "Start here", "Explore"])
+match_tab, map_tab, peer_tab, start_tab, brand_tab, explore_tab = st.tabs(
+    ["Matches", "Map", "Organizations like yours", "Start here",
+     "Brand kit", "Explore"])
 
 with match_tab:
     if vec is None:
@@ -222,7 +224,55 @@ Verify everything against the source before acting:
     st.info("General information compiled from public sources, not legal or "
             "tax advice. Requirements and fees change — confirm with the "
             "Attorney General's office or an attorney.")
+with brand_tab:
+    st.caption("A starting brand for a new organization — colors checked "
+               "against accessibility standards, fonts that cost nothing.")
 
+    c1, c2 = st.columns(2)
+    tone = c1.selectbox("Tone", list(TONES))
+    shape = c2.selectbox("Logo shape", SHAPES)
+
+    colors = palette(name, cause, tone)
+    checks = contrast_report(colors)
+    svg = logo_svg(name, colors, shape)
+
+    left, right = st.columns([1, 2])
+    with left:
+        st.markdown(svg, unsafe_allow_html=True)
+    with right:
+        st.markdown(f"### {name}")
+        st.caption(f"{cause.title()} · {city.title()}")
+        heading, body = __import__("brand").FONTS[tone]
+        st.write(f"**Headings:** {heading}  \n**Body:** {body}")
+
+    st.write("**Palette**")
+    swatches = st.columns(5)
+    for col, (role, code) in zip(swatches, [
+            ("Primary", colors["primary"]), ("Dark", colors["dark"]),
+            ("Accent", colors["accent"]), ("Surface", colors["surface"]),
+            ("Ink", colors["ink"])]):
+        col.markdown(
+            f'<div style="background:{code};height:64px;border-radius:8px;'
+            f'border:1px solid #ddd"></div>'
+            f'<div style="font-size:12px;margin-top:4px">{role}<br>'
+            f'<code>{code}</code></div>', unsafe_allow_html=True)
+
+    st.write("")
+    st.write("**Accessibility check**")
+    for c in checks:
+        icon = "PASS" if c["level"] != "Fails" else "FAIL"
+        st.write(f"{icon} — {c['use']}: **{c['ratio']}:1** ({c['level']})")
+
+    st.caption("WCAG AA requires 4.5:1 for body text. If a pairing fails, "
+               "try a different tone.")
+
+    d1, d2 = st.columns(2)
+    d1.download_button("Download logo (SVG)", svg,
+                       f"{name.lower().replace(' ', '-')}-logo.svg",
+                       "image/svg+xml")
+    d2.download_button("Download brand sheet",
+                       brand_sheet(name, cause, city, tone, colors, checks),
+                       "brand-sheet.md")
 with explore_tab:
     st.caption(f"{len(grants):,} grants from {grants.funder_ein.nunique()} "
                f"Massachusetts foundations, {grants.tax_year.min():.0f}–"
